@@ -24,9 +24,21 @@ message ChatMessage {
   int64 timestamp = 4;
 }
 
+message ElectionMessage {
+  int32 candidatePort = 1;
+  string candidateHost = 2;
+}
+
+message CoordinatorMessage {
+  int32 leaderPort = 1;
+  string leaderHost = 2;
+}
+
 service FamilyService {
   rpc Join (NodeInfo) returns (FamilyView);
   rpc GetFamily (Empty) returns (FamilyView);
-
   rpc ReceiveChat (ChatMessage) returns (Empty);
+
+  rpc Election (ElectionMessage) returns (Empty);
+  rpc Coordinator (CoordinatorMessage) returns (Empty);
 }

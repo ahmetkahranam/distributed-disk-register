@@ -1,4 +1,3 @@
-Distributed-Disk-Registery (gRPC + TCP)
 =======================================
 
 ---

@@ -25,6 +25,9 @@ public class NodeMain {
 
     private static final int START_PORT = 5555;
     private static final int PRINT_INTERVAL_SECONDS = 10;
+    private static BroadcastQueue broadcastQueue;
+    private static LeaderElection leaderElection;
+    private static TcpListener tcpListener;
 
     public static void main(String[] args) throws Exception {
         String host = "127.0.0.1";
@@ -35,8 +38,13 @@ public class NodeMain {
                 .setPort(port)
                 .build();
 
+        broadcastQueue = new BroadcastQueue();
         NodeRegistry registry = new NodeRegistry();
         FamilyServiceImpl service = new FamilyServiceImpl(registry, self);
+
+        tcpListener = new TcpListener(registry, self, broadcastQueue);
+        leaderElection = new LeaderElection(self, registry, tcpListener);
+        service.setLeaderElection(leaderElection);
 
         Server server = ServerBuilder
                 .forPort(port)
@@ -46,14 +54,19 @@ public class NodeMain {
 
                 System.out.printf("Node started on %s:%d%n", host, port);
 
-                // Eğer bu ilk node ise (port 5555), TCP 6666'da text dinlesin
-                if (port == START_PORT) {
-                    startLeaderTextListener(registry, self);
+                discoverExistingNodes(host, port, registry, self);
+
+                NodeInfo initialLeader = leaderElection.findInitialLeader();
+
+                if (initialLeader.getHost().equals(self.getHost()) &&
+                    initialLeader.getPort() == self.getPort()) {
+                    leaderElection.becomeLeader();
+                } else {
+                    leaderElection.setLeader(initialLeader);
                 }
 
-                discoverExistingNodes(host, port, registry, self);
-                startFamilyPrinter(registry, self);
-                startHealthChecker(registry, self);
+                startFamilyPrinter(registry, self, leaderElection);
+                startHealthChecker(registry, self, leaderElection);
 
                 server.awaitTermination();
 
@@ -62,8 +75,7 @@ public class NodeMain {
 
     }
 
-    private static void startLeaderTextListener(NodeRegistry registry, NodeInfo self) {
-    // Sadece lider (5555 portlu node) bu methodu çağırmalı
+    private static void startLeaderTextListener(NodeRegistry registry, NodeInfo self, BroadcastQueue queue) {
     new Thread(() -> {
         try (ServerSocket serverSocket = new ServerSocket(6666)) {
             System.out.printf("Leader listening for text on TCP %s:%d%n",
@@ -71,7 +83,7 @@ public class NodeMain {
 
             while (true) {
                 Socket client = serverSocket.accept();
-                new Thread(() -> handleClientTextConnection(client, registry, self)).start();
+                new Thread(() -> handleClientTextConnection(client, registry, self, queue)).start();
             }
 
         } catch (IOException e) {
@@ -82,7 +94,8 @@ public class NodeMain {
 
 private static void handleClientTextConnection(Socket client,
                                                NodeRegistry registry,
-                                               NodeInfo self) {
+                                               NodeInfo self,
+                                               BroadcastQueue queue) {
     System.out.println("New TCP client connected: " + client.getRemoteSocketAddress());
     try (BufferedReader reader = new BufferedReader(
             new InputStreamReader(client.getInputStream()))) {
@@ -94,8 +107,9 @@ private static void handleClientTextConnection(Socket client,
 
             long ts = System.currentTimeMillis();
 
-            // Kendi üstüne de yaz
             System.out.println("📝 Received from TCP: " + text);
+
+            ChatLogger.logMessage(self.getHost(), self.getPort(), text);
 
             ChatMessage msg = ChatMessage.newBuilder()
                     .setText(text)
@@ -104,8 +118,7 @@ private static void handleClientTextConnection(Socket client,
                     .setTimestamp(ts)
                     .build();
 
-            // Tüm family üyelerine broadcast et
-            broadcastToFamily(registry, self, msg);
+            broadcastToFamily(registry, self, msg, queue);
         }
 
     } catch (IOException e) {
@@ -117,36 +130,18 @@ private static void handleClientTextConnection(Socket client,
 
 private static void broadcastToFamily(NodeRegistry registry,
                                       NodeInfo self,
-                                      ChatMessage msg) {
+                                      ChatMessage msg,
+                                      BroadcastQueue queue) {
 
     List<NodeInfo> members = registry.snapshot();
 
     for (NodeInfo n : members) {
-        // Kendimize tekrar gönderme
         if (n.getHost().equals(self.getHost()) && n.getPort() == self.getPort()) {
             continue;
         }
 
-        ManagedChannel channel = null;
-        try {
-            channel = ManagedChannelBuilder
-                    .forAddress(n.getHost(), n.getPort())
-                    .usePlaintext()
-                    .build();
-
-            FamilyServiceGrpc.FamilyServiceBlockingStub stub =
-                    FamilyServiceGrpc.newBlockingStub(channel);
-
-            stub.receiveChat(msg);
-
-            System.out.printf("Broadcasted message to %s:%d%n", n.getHost(), n.getPort());
-
-        } catch (Exception e) {
-            System.err.printf("Failed to send to %s:%d (%s)%n",
-                    n.getHost(), n.getPort(), e.getMessage());
-        } finally {
-            if (channel != null) channel.shutdownNow();
-        }
+        queue.enqueue(n, msg, self);
+        System.out.printf("→ Enqueued message for %s:%d%n", n.getHost(), n.getPort());
     }
 }
 
@@ -191,7 +186,7 @@ private static void broadcastToFamily(NodeRegistry registry,
         }
     }
 
-    private static void startFamilyPrinter(NodeRegistry registry, NodeInfo self) {
+    private static void startFamilyPrinter(NodeRegistry registry, NodeInfo self, LeaderElection election) {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
         scheduler.scheduleAtFixedRate(() -> {
@@ -199,8 +194,15 @@ private static void broadcastToFamily(NodeRegistry registry,
             System.out.println("======================================");
             System.out.printf("Family at %s:%d (me)%n", self.getHost(), self.getPort());
             System.out.println("Time: " + LocalDateTime.now());
-            System.out.println("Members:");
 
+            NodeInfo leader = election.getLeader();
+            if (leader != null) {
+                System.out.printf("Leader: %s:%d%s%n",
+                        leader.getHost(), leader.getPort(),
+                        election.isLeader() ? " (me)" : "");
+            }
+
+            System.out.println("Members:");
             for (NodeInfo n : members) {
                 boolean isMe = n.getHost().equals(self.getHost()) && n.getPort() == self.getPort();
                 System.out.printf(" - %s:%d%s%n",
@@ -212,14 +214,16 @@ private static void broadcastToFamily(NodeRegistry registry,
         }, 3, PRINT_INTERVAL_SECONDS, TimeUnit.SECONDS);
     }
 
-    private static void startHealthChecker(NodeRegistry registry, NodeInfo self) {
+    private static void startHealthChecker(NodeRegistry registry, NodeInfo self,
+                                           LeaderElection election) {
     ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
     scheduler.scheduleAtFixedRate(() -> {
         List<NodeInfo> members = registry.snapshot();
+        NodeInfo currentLeader = election.getLeader();
+        boolean leaderAlive = false;
 
         for (NodeInfo n : members) {
-            // Kendimizi kontrol etmeyelim
             if (n.getHost().equals(self.getHost()) && n.getPort() == self.getPort()) {
                 continue;
             }
@@ -234,15 +238,25 @@ private static void broadcastToFamily(NodeRegistry registry,
                 FamilyServiceGrpc.FamilyServiceBlockingStub stub =
                         FamilyServiceGrpc.newBlockingStub(channel);
 
-                // Ping gibi kullanıyoruz: cevap bizi ilgilendirmiyor,
-                // sadece RPC'nin hata fırlatmaması önemli.
                 stub.getFamily(Empty.newBuilder().build());
 
+                if (currentLeader != null &&
+                    n.getHost().equals(currentLeader.getHost()) &&
+                    n.getPort() == currentLeader.getPort()) {
+                    leaderAlive = true;
+                }
+
             } catch (Exception e) {
-                // Bağlantı yok / node ölmüş → listeden çıkar
                 System.out.printf("Node %s:%d unreachable, removing from family%n",
                         n.getHost(), n.getPort());
                 registry.remove(n);
+
+                if (currentLeader != null &&
+                    n.getHost().equals(currentLeader.getHost()) &&
+                    n.getPort() == currentLeader.getPort()) {
+                    System.out.println("⚠️  Leader is down!");
+                    leaderAlive = false;
+                }
             } finally {
                 if (channel != null) {
                     channel.shutdownNow();
@@ -250,7 +264,13 @@ private static void broadcastToFamily(NodeRegistry registry,
             }
         }
 
-    }, 5, 10, TimeUnit.SECONDS); // 5 sn sonra başla, 10 sn'de bir kontrol et
+        if (currentLeader != null && !leaderAlive &&
+            !election.isLeader()) {
+            System.out.println("Leader is dead, starting election...");
+            election.startElection();
+        }
+
+    }, 5, 10, TimeUnit.SECONDS);
 }
 
 }
