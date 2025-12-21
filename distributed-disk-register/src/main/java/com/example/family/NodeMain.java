@@ -1,25 +1,25 @@
 package com.example.family;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
+import family.ChatMessage;
 import family.Empty;
 import family.FamilyServiceGrpc;
 import family.FamilyView;
 import family.NodeInfo;
-import family.ChatMessage;
-
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.Socket;
-
-
-import java.io.IOException;
-import java.net.ServerSocket;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.concurrent.*;
 
 public class NodeMain {
 
@@ -28,6 +28,9 @@ public class NodeMain {
     private static BroadcastQueue broadcastQueue;
     private static LeaderElection leaderElection;
     private static TcpListener tcpListener;
+    private static final boolean USE_REDIS = Boolean.parseBoolean(
+            System.getenv().getOrDefault("USE_REDIS", "false")
+    );
 
     public static void main(String[] args) throws Exception {
         String host = "127.0.0.1";
@@ -39,7 +42,20 @@ public class NodeMain {
                 .build();
 
         broadcastQueue = new BroadcastQueue();
-        NodeRegistry registry = new NodeRegistry();
+        
+        // Choose registry implementation based on environment variable
+        NodeRegistry registry;
+        RedisNodeRegistry redisRegistry = null;
+        
+        if (USE_REDIS) {
+            System.out.println("[CONFIG] Using Redis-backed registry");
+            redisRegistry = new RedisNodeRegistry("family-cluster");
+            registry = new NodeRegistryAdapter(redisRegistry);
+        } else {
+            System.out.println("[CONFIG] Using in-memory registry");
+            registry = new NodeRegistry();
+        }
+        
         FamilyServiceImpl service = new FamilyServiceImpl(registry, self);
 
         tcpListener = new TcpListener(registry, self, broadcastQueue);
@@ -67,6 +83,11 @@ public class NodeMain {
 
                 startFamilyPrinter(registry, self, leaderElection);
                 startHealthChecker(registry, self, leaderElection);
+                
+                // Heartbeat for Redis TTL refresh
+                if (USE_REDIS && registry instanceof NodeRegistryAdapter) {
+                    startRedisHeartbeat((NodeRegistryAdapter) registry, self);
+                }
 
                 server.awaitTermination();
 
@@ -107,7 +128,7 @@ private static void handleClientTextConnection(Socket client,
 
             long ts = System.currentTimeMillis();
 
-            System.out.println("📝 Received from TCP: " + text);
+            System.out.println("[TCP] Received from TCP: " + text);
 
             ChatLogger.logMessage(self.getHost(), self.getPort(), text);
 
@@ -141,7 +162,7 @@ private static void broadcastToFamily(NodeRegistry registry,
         }
 
         queue.enqueue(n, msg, self);
-        System.out.printf("→ Enqueued message for %s:%d%n", n.getHost(), n.getPort());
+        System.out.printf("-> Enqueued message for %s:%d%n", n.getHost(), n.getPort());
     }
 }
 
@@ -254,7 +275,7 @@ private static void broadcastToFamily(NodeRegistry registry,
                 if (currentLeader != null &&
                     n.getHost().equals(currentLeader.getHost()) &&
                     n.getPort() == currentLeader.getPort()) {
-                    System.out.println("⚠️  Leader is down!");
+                    System.out.println("[WARNING] Leader is down!");
                     leaderAlive = false;
                 }
             } finally {
@@ -272,5 +293,16 @@ private static void broadcastToFamily(NodeRegistry registry,
 
     }, 5, 10, TimeUnit.SECONDS);
 }
+
+    private static void startRedisHeartbeat(NodeRegistryAdapter registry, NodeInfo self) {
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                registry.heartbeat(self);
+            } catch (Exception e) {
+                System.err.println("[REDIS] Heartbeat failed: " + e.getMessage());
+            }
+        }, 0, 10, TimeUnit.SECONDS);
+    }
 
 }

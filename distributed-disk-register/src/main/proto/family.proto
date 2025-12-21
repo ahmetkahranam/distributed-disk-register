@@ -22,6 +22,8 @@ message ChatMessage {
   string fromHost = 2;
   int32 fromPort = 3;
   int64 timestamp = 4;
+  map<string, int64> vectorClock = 5;
+  string originNodeId = 6;
 }
 
 message ElectionMessage {
@@ -41,4 +43,7 @@ service FamilyService {
 
   rpc Election (ElectionMessage) returns (Empty);
   rpc Coordinator (CoordinatorMessage) returns (Empty);
+  
+  // Bidirectional streaming for real-time chat
+  rpc ChatStream (stream ChatMessage) returns (stream ChatMessage);
 }

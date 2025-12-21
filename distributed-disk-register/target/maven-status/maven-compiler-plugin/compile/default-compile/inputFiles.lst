@@ -1,10 +1,17 @@
 C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\BroadcastQueue.java
 C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\BroadcastTask.java
 C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\ChatLogger.java
+C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\ChatStreamManager.java
 C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\FamilyServiceImpl.java
 C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\LeaderElection.java
+C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\MultiLeaderStore.java
 C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\NodeMain.java
 C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\NodeRegistry.java
+C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\NodeRegistryAdapter.java
+C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\RedisNodeRegistry.java
+C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\TcpListener.java
+C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\VectorClock.java
+C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\src\main\java\com\example\family\VersionedMessage.java
 C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\target\generated-sources\protobuf\grpc-java\family\FamilyServiceGrpc.java
 C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\target\generated-sources\protobuf\java\family\ChatMessage.java
 C:\Users\ahmet\Desktop\distributed-disk-registers\distributed-disk-register\target\generated-sources\protobuf\java\family\ChatMessageOrBuilder.java

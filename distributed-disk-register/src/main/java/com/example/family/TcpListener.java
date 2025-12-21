@@ -1,14 +1,14 @@
 package com.example.family;
 
-import family.ChatMessage;
-import family.NodeInfo;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import family.ChatMessage;
+import family.NodeInfo;
 
 public class TcpListener {
 
@@ -23,6 +23,10 @@ public class TcpListener {
         this.registry = registry;
         this.self = self;
         this.queue = queue;
+    }
+
+    public boolean isRunning() {
+        return running.get();
     }
 
     public synchronized void start() {

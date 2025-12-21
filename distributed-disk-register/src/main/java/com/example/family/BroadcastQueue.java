@@ -1,15 +1,15 @@
 package com.example.family;
 
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+
 import family.ChatMessage;
 import family.FamilyServiceGrpc;
 import family.NodeInfo;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 
 public class BroadcastQueue {
 
@@ -67,12 +67,12 @@ public class BroadcastQueue {
 
             stub.receiveChat(msg);
 
-            System.out.printf("✓ Broadcasted to %s:%d%n", target.getHost(), target.getPort());
+            System.out.printf("[OK] Broadcasted to %s:%d%n", target.getHost(), target.getPort());
             ChatLogger.logBroadcast(sender.getHost(), sender.getPort(),
                     target.getHost(), target.getPort(), msg.getText(), true);
 
         } catch (Exception e) {
-            System.err.printf("✗ Failed to send to %s:%d (attempt %d/%d): %s%n",
+            System.err.printf("[FAIL] Failed to send to %s:%d (attempt %d/%d): %s%n",
                     target.getHost(), target.getPort(),
                     task.getRetryCount() + 1, MAX_RETRIES, e.getMessage());
 
