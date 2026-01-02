@@ -43,7 +43,6 @@ public class NodeMain {
 
         broadcastQueue = new BroadcastQueue();
         
-        // Choose registry implementation based on environment variable
         NodeRegistry registry;
         RedisNodeRegistry redisRegistry = null;
         
@@ -57,14 +56,22 @@ public class NodeMain {
         }
         
         FamilyServiceImpl service = new FamilyServiceImpl(registry, self);
+        MessageStore messageStore = new MessageStore(port);
+        StorageServiceImpl storageService = new StorageServiceImpl(messageStore);
+        
+        // Shutdown hook to cleanup messages
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            messageStore.cleanup();
+        }));
 
-        tcpListener = new TcpListener(registry, self, broadcastQueue);
+        tcpListener = new TcpListener(registry, self, broadcastQueue, messageStore);
         leaderElection = new LeaderElection(self, registry, tcpListener);
         service.setLeaderElection(leaderElection);
 
         Server server = ServerBuilder
                 .forPort(port)
                 .addService(service)
+                .addService(storageService)
                 .build()
                 .start();
 
@@ -84,7 +91,6 @@ public class NodeMain {
                 startFamilyPrinter(registry, self, leaderElection);
                 startHealthChecker(registry, self, leaderElection);
                 
-                // Heartbeat for Redis TTL refresh
                 if (USE_REDIS && registry instanceof NodeRegistryAdapter) {
                     startRedisHeartbeat((NodeRegistryAdapter) registry, self);
                 }

@@ -101,10 +101,8 @@ public class FamilyServiceImpl extends FamilyServiceGrpc.FamilyServiceImplBase {
             public void onNext(ChatMessage message) {
                 System.out.println("[STREAM] Received message from stream: " + message.getText());
                 
-                // Broadcast to all connected streams
                 streamManager.broadcastMessage(message);
                 
-                // Also log the message
                 ChatLogger.logMessage(message.getFromHost(), message.getFromPort(), message.getText());
             }
             

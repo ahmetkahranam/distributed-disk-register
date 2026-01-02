@@ -98,7 +98,7 @@ public class RedisNodeRegistry {
     }
     
     public void heartbeat(NodeInfo node) {
-        add(node); // Refresh TTL
+        add(node);
     }
     
     public void close() {

@@ -49,6 +49,11 @@ buildNumber.properties
 # Logs directory
 logs/
 
+# Message files and directories
+messages/
+messages-*/
+*.msg
+
 # OS
 .DS_Store
 Thumbs.db
