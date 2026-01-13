@@ -31,6 +31,7 @@ public class NodeMain {
     private static final boolean USE_REDIS = Boolean.parseBoolean(
             System.getenv().getOrDefault("USE_REDIS", "false")
     );
+    private static final String IO_MODE = System.getenv().getOrDefault("IO_MODE", "BUFFERED");
 
     public static void main(String[] args) throws Exception {
         String host = "127.0.0.1";
@@ -55,8 +56,16 @@ public class NodeMain {
             registry = new NodeRegistry();
         }
         
+        // IO Mode selection
+        MessageStore.IOMode ioMode = MessageStore.IOMode.BUFFERED;
+        try {
+            ioMode = MessageStore.IOMode.valueOf(IO_MODE.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            System.err.println("[CONFIG] Invalid IO_MODE: " + IO_MODE + ", using BUFFERED");
+        }
+        
         FamilyServiceImpl service = new FamilyServiceImpl(registry, self);
-        MessageStore messageStore = new MessageStore(port);
+        MessageStore messageStore = new MessageStore(port, ioMode);
         StorageServiceImpl storageService = new StorageServiceImpl(messageStore);
         
         // Shutdown hook to cleanup messages

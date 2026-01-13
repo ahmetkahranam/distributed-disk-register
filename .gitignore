@@ -54,6 +54,13 @@ messages/
 messages-*/
 *.msg
 
+# Temporary files
+cp.txt
+*.conf
+
+# Large CSV test files
+hatokuse-client/src/*.csv
+
 # OS
 .DS_Store
 Thumbs.db

@@ -53,6 +53,7 @@ family\FamilyViewOrBuilder.class
 family\StorageServiceGrpc$StorageServiceStub.class
 family\ElectionMessage.class
 com\example\family\RedisNodeRegistry.class
+com\example\family\MessageStore$IOMode.class
 com\example\family\MessageStore.class
 family\FamilyServiceGrpc$FamilyServiceImplBase.class
 family\StorageServiceGrpc$MethodHandlers.class
